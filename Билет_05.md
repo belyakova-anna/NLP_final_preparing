@@ -1,0 +1,152 @@
+# Билет 5
+
+## Q1. FlashAttention
+
+**FlashAttention** (Dao et al., NeurIPS 2022, «FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness») — это **точный** (не аппроксимация) алгоритм вычисления self-attention, который значительно быстрее наивной реализации за счёт **учёта иерархии памяти GPU** (HBM ↔ SRAM) и **online softmax**. FlashAttention-2 (2023) и FlashAttention-3 (2024, для Hopper) — последующие оптимизации.
+
+### Проблема: attention bottleneck — память, а не compute
+
+Стандартная attention считается так:
+
+$$S = QK^\top, \quad P = \mathrm{softmax}(S), \quad O = PV.$$
+
+Промежуточная матрица $S \in \mathbb{R}^{n \times n}$ хранится в **HBM** (медленная глобальная память GPU). Доступ к HBM в разы медленнее доступа к **SRAM** (on-chip кэш, ~20 MB на A100). При длине $n = 4096$ матрица $S$ — это $4096^2 \cdot 2$ байт = ~33 MB, и каждый шаг (запись $S$, чтение для softmax, запись $P$, чтение для умножения на $V$) — это много IO в HBM.
+
+Memory-bound bottleneck: на современных GPU compute-производительность сильно превышает bandwidth, и attention тратит большую часть времени на чтение/запись из HBM, а не на матричные операции.
+
+### Идея: tiling + online softmax + recomputation
+
+**FlashAttention** делит $Q, K, V$ на блоки (tiles), такие чтобы блоки помещались в SRAM, и считает результат **никогда не материализуя** полную матрицу $S$.
+
+1. **Tiling**: $Q$ режется на блоки $Q_i$, $K, V$ — на $K_j, V_j$;
+2. **Внешний цикл по $Q_i$, внутренний по $K_j, V_j$**: для каждого $Q_i$ итерируем по всем ключам/значениям, обновляя бегущий выход $O_i$;
+3. **Online softmax**: softmax считается **инкрементально**. Если на шаге $j$ обработали блоки $K_{1..j}, V_{1..j}$, мы храним статистики:
+   - $m_j$ — running max каждой строки;
+   - $\ell_j$ — running denominator (sum of exp);
+   - $O_j$ — running output.
+   На добавлении нового блока $K_{j+1}, V_{j+1}$:
+$$\tilde m = \max(m_j, \mathrm{rowmax}(Q_i K_{j+1}^\top)),$$
+$$\ell_{j+1} = e^{m_j - \tilde m}\,\ell_j + \mathrm{rowsum}(e^{Q_i K_{j+1}^\top - \tilde m}),$$
+$$O_{j+1} = \frac{1}{\ell_{j+1}}\bigl(\ell_j e^{m_j - \tilde m} O_j + e^{Q_i K_{j+1}^\top - \tilde m} V_{j+1}\bigr).$$
+4. **Recomputation на backward**: вместо хранения активаций $S, P$ для backward пересчитываем их (compute дешевле IO).
+
+Итог: всё считается за $O(n^2)$ compute (как у наивной), но **HBM-чтения сокращаются в ~$n / M$ раз**, где $M$ — размер SRAM-блока. На практике 2–4× ускорение и **линейная по $n$ память** ($O(n)$ вместо $O(n^2)$).
+
+### Почему «exact»
+
+В отличие от Linformer / Performer / Longformer, FlashAttention не аппроксимирует attention — выход численно совпадает с обычным (с точностью до порядка операций FP).
+
+### Преимущества
+
+1. **Скорость**: 2–4× ускорение на GPT-2 / GPT-3-style моделях;
+2. **Память $O(n)$** вместо $O(n^2)$ — позволяет обучать с длинным контекстом без OOM;
+3. **Точность сохраняется** — никаких аппроксимаций;
+4. **Совместимость** — drop-in замена, тот же API.
+
+### FlashAttention-2 (2023)
+
+Дальнейшая оптимизация: лучшая параллелизация по варпам, минимизация non-matmul операций, поддержка GQA, dropout, причинной маски. ~2× быстрее FlashAttention-1 на A100.
+
+### FlashAttention-3 (2024)
+
+Для Hopper-GPU (H100) с FP8/Tensor Cores. Использует асинхронность WMMA + softcap, ~75% peak FLOPs на H100.
+
+### Связь с темами курса
+
+FlashAttention — стандарт де-факто в современных LLM-фреймворках (PyTorch SDPA, xformers, vLLM, HuggingFace). Часто комбинируется с GQA (меньший KV) и RoPE (positional encoding на лету).
+
+---
+
+## Q2. Architecture of common agent-system: Planner, Executor, Orchestrator
+
+Современная LLM-агентная система — это, как правило, не монолитная LLM с tool-calls, а **модульная архитектура** из нескольких ролей. Самая типичная декомпозиция включает три ключевые роли: **Planner**, **Executor**, **Orchestrator** (иногда добавляются Critic, Memory, Retriever и др.).
+
+### Orchestrator
+
+**Orchestrator** (он же Coordinator, Router) — корневой узел системы, который:
+- принимает запрос пользователя;
+- решает высокоуровневую стратегию (надо ли строить план, можно ли ответить напрямую, нужно ли позвать конкретный tool/sub-agent);
+- маршрутизирует подзадачи между Planner и Executor;
+- агрегирует результаты, формирует финальный ответ;
+- управляет общей памятью (history, scratchpad);
+- следит за timeouts, ошибками, бюджетом по токенам/итерациям.
+
+Orchestrator — это «дирижёр», тонкая обвязка вокруг LLM-вызовов, иногда сам реализован как LLM-агент с особым промптом.
+
+### Planner
+
+**Planner** — компонент, отвечающий за **декомпозицию** задачи на последовательность шагов. Реализуется как LLM-вызов с промптом «составь план для решения X» или как специализированная модель.
+
+Подходы:
+- **Sequential planning** — линейный список шагов (Plan-and-Execute, Wang et al., 2023);
+- **Hierarchical planning** — иерархия high-level → low-level (HuggingGPT, BabyAGI);
+- **Tree search planning** — Tree-of-Thoughts (Yao et al., 2023): дерево вариантов, выбор лучшего по эвристике;
+- **Reactive planning** — план переплетён с действиями (ReAct);
+- **Reflection / re-planning** — после неудачного шага Planner перестраивает план (Reflexion, Shinn et al., 2023).
+
+Planner может выводить план как:
+- список естественных шагов;
+- DAG (граф зависимостей);
+- структурированный JSON / DSL;
+- code (например, Python в CodeAct).
+
+### Executor
+
+**Executor** — компонент, который **исполняет каждый шаг плана**. Это может быть:
+- вызов внешнего инструмента (search, calculator, code interpreter, API);
+- запрос к векторной базе (RAG);
+- обращение к sub-agent'у с подзадачей;
+- генерация текста / кода непосредственно LLM.
+
+Executor получает на вход: текущий шаг плана, релевантный контекст (история, retrieved knowledge), список доступных tools со схемами; на выходе — результат шага (наблюдение, observation).
+
+Часто Executor — это та же LLM в режиме function-calling: она генерирует JSON-вызов tool'а, оркестратор вызывает его, наблюдение возвращается обратно.
+
+### Поток данных и обратная связь
+
+Типичный цикл:
+
+```
+User query
+    │
+    ▼
+Orchestrator ──► Planner ──► [план: шаг1, шаг2, ..., шагN]
+    │                              │
+    ▼                              │
+для каждого шага:                  │
+  Orchestrator ──► Executor ──► Observation
+    │                              │
+    ▼                              ▼
+  обновление памяти / scratchpad
+    │
+    ▼
+если шаг провалился → re-plan / reflect
+если все шаги выполнены → синтез ответа → User
+```
+
+Обратная связь обеспечивает **робастность**: при ошибке шага Orchestrator может вызвать Planner на пере-планирование (replan), либо Critic на анализ ошибки.
+
+### Дополнительные роли
+
+- **Critic / Evaluator** — оценивает качество шагов, ловит ошибки/галлюцинации (Reflexion, CRITIC);
+- **Memory** — хранит долгосрочный контекст: vector store, knowledge graph, journal;
+- **Retriever** — RAG-подсистема для подгрузки релевантных документов под текущий шаг;
+- **Sub-agents** — специализированные агенты, к которым обращается Orchestrator (research-agent, code-agent, data-analysis-agent);
+- **Tools / Skills** — библиотека процедур с описаниями.
+
+### Реализации
+
+- **LangGraph** — графовая модель (узлы = роли, рёбра = переходы), поддерживает циклы, условия, состояние;
+- **AutoGen** (Microsoft) — multi-agent conversation framework;
+- **CrewAI** — декларативное описание ролей, задач, процессов;
+- **LangChain Agents** — классический набор `Agent + AgentExecutor + Tools`;
+- **OpenAI Assistants API / Anthropic Computer Use / Claude Code / Codex** — managed-агенты с встроенным оркестратором;
+- **AutoGPT, BabyAGI** — ранние open-source агенты с Orchestrator/Planner/Executor.
+
+### Преимущества модульной архитектуры
+
+1. **Разделение ответственности** — каждая роль решает свою задачу с подходящим промптом/моделью;
+2. **Использование разных моделей** — мощная LLM на Planner, дешёвая на Executor;
+3. **Тестируемость и наблюдаемость** — можно логировать каждый шаг;
+4. **Масштабирование** — несколько Executor'ов параллельно;
+5. **Робастность** — re-planning, retries, critic-loops.
