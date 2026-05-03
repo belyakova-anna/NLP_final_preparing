@@ -73,6 +73,130 @@ function buildGrid(filter = "") {
 }
 
 // ------------------------------------------------------------
+function isEscaped(md, i) {
+  let k = i - 1;
+  let n = 0;
+  while (k >= 0 && md[k] === "\\") {
+    n++;
+    k--;
+  }
+  return n % 2 === 1;
+}
+
+function indexOfUnescapedDollar(md, from) {
+  let i = from;
+  while (i < md.length) {
+    const j = md.indexOf("$", i);
+    if (j === -1) return -1;
+    if (!isEscaped(md, j)) return j;
+    i = j + 1;
+  }
+  return -1;
+}
+
+/** Closing $$ with `{`/`}` balance (same idea as KaTeX auto-render), so `$$` inside TeX does not end the block early. */
+function findClosingDoubleDollar(md, startAfterOpen) {
+  let index = startAfterOpen;
+  let braceLevel = 0;
+  while (index < md.length) {
+    if (braceLevel <= 0 && md[index] === "$" && md[index + 1] === "$") {
+      return index;
+    }
+    const character = md[index];
+    if (character === "\\") {
+      index++;
+    } else if (character === "{") {
+      braceLevel++;
+    } else if (character === "}") {
+      braceLevel--;
+    }
+    index++;
+  }
+  return -1;
+}
+
+// Markdown + math: extract $…$ / $$…$$ before marked, so "_" is not parsed as emphasis
+// ------------------------------------------------------------
+function protectMathForMarkdown(md) {
+  const pairs = [];
+  let slot = 0;
+  /** No `@` — GFM/marked may mangle `@@…@@` (mentions / autolinks), breaking restore. */
+  const placeholder = () => `ZZMATHREF${slot++}ZZ`;
+
+  const parts = [];
+  let pos = 0;
+
+  while (pos < md.length) {
+    if (md.startsWith("```", pos)) {
+      const close = md.indexOf("```", pos + 3);
+      const end = close === -1 ? md.length : close + 3;
+      parts.push(md.slice(pos, end));
+      pos = end;
+      continue;
+    }
+
+    if (md[pos] === "`") {
+      const close = md.indexOf("`", pos + 1);
+      if (close === -1) {
+        parts.push(md.slice(pos));
+        break;
+      }
+      parts.push(md.slice(pos, close + 1));
+      pos = close + 1;
+      continue;
+    }
+
+    if (md.startsWith("$$", pos) && !isEscaped(md, pos)) {
+      const close = findClosingDoubleDollar(md, pos + 2);
+      if (close === -1) {
+        parts.push(md.slice(pos));
+        break;
+      }
+      const block = md.slice(pos, close + 2);
+      const ph = placeholder();
+      pairs.push([ph, block]);
+      parts.push(ph);
+      pos = close + 2;
+      continue;
+    }
+
+    if (md[pos] === "$" && !isEscaped(md, pos)) {
+      const close = indexOfUnescapedDollar(md, pos + 1);
+      if (close === -1) {
+        parts.push(md.slice(pos));
+        break;
+      }
+      const block = md.slice(pos, close + 1);
+      const ph = placeholder();
+      pairs.push([ph, block]);
+      parts.push(ph);
+      pos = close + 1;
+      continue;
+    }
+
+    const nextDollar = indexOfUnescapedDollar(md, pos);
+    const nextFence = md.indexOf("```", pos);
+    const nextTick = md.indexOf("`", pos);
+    let next = md.length;
+    for (const n of [nextDollar, nextFence, nextTick]) {
+      if (n !== -1 && n < next) next = n;
+    }
+    parts.push(md.slice(pos, next));
+    pos = next;
+  }
+
+  return { md: parts.join(""), pairs };
+}
+
+function restoreMathPlaceholders(html, pairs) {
+  let out = html;
+  for (const [ph, tex] of pairs) {
+    out = out.split(ph).join(tex);
+  }
+  return out;
+}
+
+// ------------------------------------------------------------
 // Article rendering
 // ------------------------------------------------------------
 async function loadTicket(n) {
@@ -101,13 +225,17 @@ async function loadTicket(n) {
   try {
     const res = await fetch(`./tickets/ticket-${num}.md`, { cache: "no-cache" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const md = await res.text();
+    const md = (await res.text()).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-    const html = marked.parse(md, {
-      gfm: true,
-      breaks: false,
-      headerIds: true,
-    });
+    const { md: mdForMarked, pairs: mathPlaceholders } = protectMathForMarkdown(md);
+    const html = restoreMathPlaceholders(
+      marked.parse(mdForMarked, {
+        gfm: true,
+        breaks: false,
+        headerIds: true,
+      }),
+      mathPlaceholders
+    );
 
     const t = TICKETS[parseInt(num, 10) - 1];
     article.innerHTML = `

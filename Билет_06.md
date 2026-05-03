@@ -137,7 +137,7 @@ $$\mathrm{Attn}(Q, K, V) = \mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}} + 
 
 Дан корпус токенов $X = (x_1, x_2, \ldots, x_T)$. Минимизируется отрицательное log-правдоподобие:
 
-$$\mathcal{L}_{LM}(\theta) = -\sum_{t=1}^{T} \log P_\theta(x_t \mid x_1, \ldots, x_{t-1}).$$
+$$\mathcal{L}_{\mathrm{LM}}(\theta) = -\sum_{t=1}^{T} \log P_{\theta}\!\left(x_t \mid x_{1:t-1}\right).$$
 
 Это **single-task** объект: всё, что модель учит, — предсказывать следующий токен. Никакого MLM, никакого NSP. Эта простота и масштабируемость на огромные корпуса — ключ успеха.
 
