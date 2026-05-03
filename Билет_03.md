@@ -31,11 +31,11 @@ $$\theta_j = 10000^{-2j/d_h}, \quad j = 0, 1, \ldots, d_h/2 - 1.$$
 
 Вектор $\mathbf{q}_m$ (позиция $m$) поворачивается блочно:
 
-$$\mathrm{RoPE}(\mathbf{q}_m, m)_{[2j, 2j+1]} = \begin{pmatrix} \cos(m\theta_j) & -\sin(m\theta_j) \\ \sin(m\theta_j) & \cos(m\theta_j) \end{pmatrix} \begin{pmatrix} q_{m, 2j} \\ q_{m, 2j+1} \end{pmatrix}.$$
+$$\mathrm{RoPE}(\mathbf{q}&#95;m, m)&#95;{[2j, 2j+1]} = \begin{pmatrix} \cos(m\theta&#95;j) & -\sin(m\theta&#95;j) \\\\ \sin(m\theta&#95;j) & \cos(m\theta&#95;j) \end{pmatrix} \begin{pmatrix} q&#95;{m, 2j} \\\\ q&#95;{m, 2j+1} \end{pmatrix}.$$
 
-То же для $\mathbf{k}_n$ с углом $n\theta_j$. Тогда:
+То же для $\mathbf{k}&#95;n$ с углом $n\theta&#95;j$. Тогда:
 
-$$\langle \mathrm{RoPE}(\mathbf{q}_m, m), \mathrm{RoPE}(\mathbf{k}_n, n) \rangle = \mathrm{Re}\bigl[\sum_j (q_{m,2j} + i q_{m,2j+1})(k_{n,2j} - i k_{n,2j+1}) e^{i(m-n)\theta_j}\bigr],$$
+$$\langle \mathrm{RoPE}(\mathbf{q}&#95;m, m), \mathrm{RoPE}(\mathbf{k}&#95;n, n) \rangle = \mathrm{Re}\bigl[\sum&#95;j (q&#95;{m,2j} + i q&#95;{m,2j+1})(k&#95;{n,2j} - i k&#95;{n,2j+1}) e^{i(m-n)\theta&#95;j}\bigr],$$
 
 где зависимость от позиций входит **только через разность** $m - n$.
 
@@ -74,7 +74,7 @@ LLaMA (с самого начала), Mistral, Qwen, DeepSeek, GPT-NeoX, Falcon,
 
 ### Тренировочная цель
 
-$$\mathcal{L}_{LM}(\theta) = -\sum_{t=1}^{T} \log P_\theta(x_t \mid x_{<t}).$$
+$$\mathcal{L}&#95;{LM}(\theta) = -\sum&#95;{t=1}^{T} \log P&#95;\theta(x_t \mid x&#95;{<t}).$$
 
 Один лосс, никакого NSP, никаких masked-токенов. На gigantic-корпусах (Common Crawl, books, code) это даёт сильнейший сигнал.
 

@@ -18,11 +18,11 @@
 ### Цели претрейнинга
 
 1. **Masked Language Modeling (MLM)**: 15% случайно выбранных токенов маскируются. Из них 80% заменяются на `[MASK]`, 10% — на случайный токен, 10% остаются как есть. Задача — предсказать исходный токен по двунаправленному контексту:
-$$\mathcal{L}_{MLM} = -\sum_{i \in M} \log P(x_i \mid x_{\setminus M}).$$
+$$\mathcal{L}&#95;{MLM} = -\sum&#95;{i \in M} \log P(x_i \mid x&#95;{\setminus M}).$$
 
 2. **Next Sentence Prediction (NSP)**: бинарная классификация — следует ли предложение B сразу за A в исходном тексте (50% позитивных, 50% случайных). Использует представление `[CLS]`.
 
-Суммарный лосс: $\mathcal{L} = \mathcal{L}_{MLM} + \mathcal{L}_{NSP}$.
+Суммарный лосс: $\mathcal{L} = \mathcal{L}&#95;{MLM} + \mathcal{L}&#95;{NSP}$.
 
 ### Применение (fine-tuning)
 
@@ -58,7 +58,7 @@ $$\mathcal{L}_{MLM} = -\sum_{i \in M} \log P(x_i \mid x_{\setminus M}).$$
 
 Собираются качественные пары `(prompt, response)` от обученных асессоров и базовая модель дообучается стандартным cross-entropy лоссом:
 
-$$\mathcal{L}_{SFT}(\theta) = -\sum_t \log P_\theta(y_t \mid x, y_{<t}).$$
+$$\mathcal{L}&#95;{SFT}(\theta) = -\sum&#95;t \log P&#95;\theta(y_t \mid x, y&#95;{<t}).$$
 
 SFT-модель $\pi_0$ становится стартовой полиси для следующих этапов и одновременно «замороженной» референсной полиси $\pi_{SFT}$ для KL-штрафа в этапе 3. В InstructGPT использовалось ~13K SFT-демонстраций.
 
@@ -72,7 +72,7 @@ $$P_\theta(y^+ \succ y^-) = \sigma\bigl(r_\theta(y^+) - r_\theta(y^-)\bigr),$$
 
 с лоссом максимального правдоподобия (отрицательная log-сигмоида разности наград):
 
-$$\mathcal{L}_{BT}(\theta) = -\sum_{(y^+, y^-) \in \mathcal{D}} \log \sigma\bigl(r_\theta(y^+) - r_\theta(y^-)\bigr).$$
+$$\mathcal{L}&#95;{BT}(\theta) = -\sum&#95;{(y^+, y^-) \in \mathcal{D}} \log \sigma\bigl(r&#95;\theta(y^+) - r&#95;\theta(y^-)\bigr).$$
 
 Лосс максимизирует разрыв скоров между winner и loser. Интересно, что RM может быть существенно меньше полиси (например, 6B RM скоринг 175B-полиси). InstructGPT собрал ~33K сравнений у ~40 разметчиков.
 
