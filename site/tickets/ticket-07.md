@@ -72,7 +72,7 @@ A:
 
 ### Развитие идеи
 
-- **Self-Consistency** (Wang et al., 2022) — семплируем N CoT, голосуем большинством за ответ (см. билет 14);
+- **Self-Consistency** (Wang et al., 2022) — семплируем N CoT, голосуем большинством за ответ (см. [билет 14](#/14));
 - **Tree of Thoughts** (Yao et al., 2023) — дерево вариантов рассуждения с поиском;
 - **Graph of Thoughts**, **Skeleton-of-Thoughts** — другие топологии;
 - **Inner monologue / scratchpad / hidden reasoning** — современные reasoning-модели (o1, o3, R1) обучены делать длинный внутренний CoT перед ответом, иногда скрытый от пользователя.

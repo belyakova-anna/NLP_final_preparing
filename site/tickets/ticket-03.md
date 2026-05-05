@@ -74,7 +74,7 @@ LLaMA (с самого начала), Mistral, Qwen, DeepSeek, GPT-NeoX, Falcon,
 
 ### Тренировочная цель
 
-$$\mathcal{L}&#95;{LM}(\theta) = -\sum&#95;{t=1}^{T} \log P&#95;\theta(x_t \mid x&#95;{<t}).$$
+$$\mathcal{L}&#95;{LM}(\theta) = -\sum&#95;{t=1}^{T} \log P&#95;\theta(x_t \mid x&#95;{1:t-1}).$$
 
 Один лосс, никакого NSP, никаких masked-токенов. На gigantic-корпусах (Common Crawl, books, code) это даёт сильнейший сигнал.
 

@@ -5,7 +5,7 @@
 ### Постановка задачи как RL
 
 Файнтюнинг LLM рассматривается как token-level Markov Decision Process (MDP):
-- **state $s_t$** — это промпт $x$ плюс уже сгенерированные токены $y_{<t}$;
+- **state $s_t$** — это промпт $x$ плюс уже сгенерированные токены $y_{1:t-1}$;
 - **action $a_t$** — следующий токен из словаря $V$ (~50K токенов);
 - **policy $\pi_\theta(a_t \mid s_t)$** — сама LLM;
 - **reward $R(x, y)$** — скаляр от reward-model в конце последовательности (sparse terminal reward);
@@ -39,7 +39,7 @@ $$L^{CLIP}(\theta) = \mathbb{E}_t \Bigl[\min\bigl(r_t(\theta) \, \hat{A}_t,\ \ma
 
 **Логика min**:
 - Если $\hat A_t > 0$ (хорошее действие), хотим увеличить $\pi_\theta$, но clip ограничивает $r_t$ сверху $1+\varepsilon$ — нельзя стать слишком уверенным за один шаг;
-- Если $\hat A_t < 0$ (плохое действие), нельзя занулить вероятность ниже $1-\varepsilon$ — это предохранитель от катастрофического «забывания».
+- Если $\hat A_t \lt 0$ (плохое действие), нельзя занулить вероятность ниже $1-\varepsilon$ — это предохранитель от катастрофического «забывания».
 
 ### Полный лосс в RLHF-PPO
 
@@ -53,7 +53,7 @@ $$L^\text{PPO} = L^{CLIP} - c_1 L^{VF} + c_2 H[\pi_\theta].$$
 
 $$r(x, y) = r_\text{RM}(x, y) - \beta \bigl(\log \pi_\text{RL}(y \mid x) - \log \pi_\text{SFT}(y \mid x)\bigr).$$
 
-Это критично для борьбы с reward hacking (см. билет 2).
+Это критично для борьбы с reward hacking (см. [билет 2](#/02)).
 
 ### GAE — Generalized Advantage Estimation
 
@@ -129,11 +129,11 @@ $$Q = Y W_Q, \quad K = X W_K, \quad V = X W_V,$$
 
 Используется в:
 - **Encoder-Decoder Transformer** (T5, BART, оригинальный Vaswani-2017) — между encoder и decoder;
-- **RETRO** — chunked cross-attention к retrieved chunks (см. билет 4);
+- **RETRO** — chunked cross-attention к retrieved chunks (см. [билет 4](#/04));
 - **Multimodal**: текст-decoder смотрит на vision-encoder (Flamingo, BLIP, LLaVA);
 - **Diffusion models** (Stable Diffusion) — UNet с cross-attention к text embeddings.
 
-**Это и есть тот механизм**, который Bahdanau и Luong применяли в RNN-seq2seq, но в Transformer-форме (см. билет 7).
+**Это и есть тот механизм**, который Bahdanau и Luong применяли в RNN-seq2seq, но в Transformer-форме (см. [билет 7](#/07)).
 
 ### Multi-Head Attention (MHA)
 
@@ -155,9 +155,9 @@ $$\mathrm{MHA}(X) = \mathrm{Concat}(\mathrm{head}_1, \ldots, \mathrm{head}_H) W_
 ### Современные оптимизации
 
 - **MQA (Multi-Query Attention)** — одна общая пара K, V на все Q-головы → меньше KV-кэш;
-- **GQA (Grouped-Query Attention)** — компромисс: $G$ групп голов с общими K, V (см. билет 4);
+- **GQA (Grouped-Query Attention)** — компромисс: $G$ групп голов с общими K, V (см. [билет 4](#/04));
 - **MLA (Multi-head Latent Attention)** в DeepSeek — low-rank сжатие KV;
-- **FlashAttention** — IO-aware вычисление (см. билет 5);
+- **FlashAttention** — IO-aware вычисление (см. [билет 5](#/05));
 - **Sliding window attention** (Mistral) — каждый токен видит окно $W$ предыдущих;
 - **Sparse attention** (Longformer, BigBird) — паттерны вместо плотной матрицы.
 
@@ -172,4 +172,4 @@ $$\mathrm{MHA}(X) = \mathrm{Concat}(\mathrm{head}_1, \ldots, \mathrm{head}_H) W_
 
 ### Связь с темами курса
 
-Attention — фундамент Transformer'а. Все темы билетов 1 (KV-cache), 3 (RoPE), 4 (GQA), 5 (FlashAttention), 7 (Bahdanau/Luong) — это либо предки, либо оптимизации этой формулы.
+Attention — фундамент Transformer'а. Все темы билетов [1](#/01) (KV-cache), [3](#/03) (RoPE), [4](#/04) (GQA), [5](#/05) (FlashAttention), [7](#/07) (Bahdanau/Luong) — это либо предки, либо оптимизации этой формулы.

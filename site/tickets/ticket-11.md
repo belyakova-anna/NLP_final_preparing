@@ -109,13 +109,13 @@ $$\mathrm{SwiGLU}(x) = (\mathrm{Swish}(x W_1) \odot x W_3)\, W_2,$$
 
 #### 3. Rotary Positional Embeddings (RoPE)
 
-Никаких обучаемых positional embeddings — RoPE применяется к Q, K в каждом слое (см. билет 3 / 15). Даёт относительную позицию, экстраполяцию на длинные контексты, отсутствие дополнительных параметров.
+Никаких обучаемых positional embeddings — RoPE применяется к Q, K в каждом слое (см. [билет 3](#/03) / [билет 15](#/15)). Даёт относительную позицию, экстраполяцию на длинные контексты, отсутствие дополнительных параметров.
 
 В LLaMA-3 контекст вырос до **128K** через scaled-RoPE / NTK-aware / YaRN.
 
 #### 4. Grouped-Query Attention (GQA) — начиная с LLaMA-2 70B и всей LLaMA-3
 
-Для экономии KV-кэша: $G$ KV-голов на $H$ Q-голов (см. билет 4). Например, LLaMA-3 70B: 64 Q-головы, 8 KV-групп.
+Для экономии KV-кэша: $G$ KV-голов на $H$ Q-голов (см. [билет 4](#/04)). Например, LLaMA-3 70B: 64 Q-головы, 8 KV-групп.
 
 #### 5. Tokenizer
 
@@ -128,7 +128,7 @@ $$\mathrm{SwiGLU}(x) = (\mathrm{Swish}(x W_1) \odot x W_3)\, W_2,$$
 
 ### Тренировка
 
-- **Causal language modeling**: $\mathcal{L} = -\sum_t \log P_\theta(x_t \mid x_{<t})$;
+- **Causal language modeling**: $\mathcal{L} = -\sum_t \log P_\theta(x_t \mid x_{1:t-1})$;
 - AdamW, $\beta_1=0.9, \beta_2=0.95$, weight decay 0.1, gradient clipping 1.0, cosine schedule с warmup;
 - BF16 / FP8 (для LLaMA-3);
 - Хорошо отфильтрованные данные: CommonCrawl + Github + arXiv + Wikipedia + Books.
